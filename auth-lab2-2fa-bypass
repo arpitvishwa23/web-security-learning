@@ -1,0 +1,290 @@
+# Authentication Vulnerability – 2FA Simple Bypass
+
+## Objective
+
+The objective of this lab is to identify and exploit a vulnerability in the application's Two-Factor Authentication (2FA) implementation. Although users are prompted to complete a second authentication step after entering valid credentials, the application fails to properly enforce this verification before granting access to protected resources.
+
+The goal is to demonstrate how an attacker with valid credentials can bypass the 2FA process and gain unauthorized access to another user's account.
+
+---
+
+## Tools Used
+
+- Web Browser (Chrome)
+- PortSwigger Web Security Academy
+
+---
+
+## Vulnerability Overview
+
+Two-Factor Authentication (2FA) is a security mechanism that requires users to provide two independent forms of verification before accessing their account.
+
+A typical authentication workflow consists of:
+
+1. Username and Password Verification
+2. Second Factor Verification (OTP, Email Code, Authenticator App, etc.)
+3. Access to Protected Resources
+
+The purpose of 2FA is to prevent unauthorized access even if an attacker obtains valid login credentials.
+
+However, security controls are only effective when they are properly enforced.
+
+In this lab, the application correctly redirects users to a 2FA verification page after successful login. However, it fails to verify whether the second authentication step has been completed before granting access to sensitive pages.
+
+As a result, an attacker can bypass the 2FA verification process entirely and access protected resources directly.
+
+---
+
+# Understanding the Vulnerability
+
+The application assumes that redirecting a user to a 2FA page is sufficient protection.
+
+However, security decisions should never rely solely on navigation flow.
+
+A secure application must verify on the server side that:
+
+```text
+User Credentials = Valid
+AND
+2FA Verification = Completed
+```
+
+before granting access.
+
+In this lab, only the first condition is validated.
+
+This allows partially authenticated users to access sensitive endpoints without completing the second authentication factor.
+
+---
+
+# Steps to Reproduce
+
+---
+
+## Step 1: Open the Lab
+
+Launch the lab and review the challenge description.
+
+The lab provides credentials for two users:
+
+```text
+wiener : peter
+carlos : montoya
+```
+
+The objective is to access Carlos's account.
+
+![Lab Overview](images/auth-lab2-2fa-bypass/01-lab-overview.png)
+
+---
+
+## Step 2: Observe the Legitimate Authentication Flow
+
+Log in using the Wiener account:
+
+```text
+Username: wiener
+Password: peter
+```
+
+After successful authentication, the application redirects to a Two-Factor Authentication page.
+
+A verification code is sent to the associated email client.
+
+Retrieve the code and complete the verification process.
+
+![Wiener 2FA Email](images/auth-lab2-2fa-bypass/02-wiener-2fa-email.png)
+
+---
+
+## Step 3: Access the Account After Successful 2FA
+
+After entering the correct verification code, access to Wiener's account page is granted.
+
+This confirms how the application intends the authentication process to work.
+
+![Wiener Account Page](images/auth-lab2-2fa-bypass/03-wiener-account-page.png)
+
+---
+
+## Step 4: Login as Carlos
+
+Log out of Wiener's account.
+
+Now authenticate using Carlos's credentials:
+
+```text
+Username: carlos
+Password: montoya
+```
+
+Once again, the application redirects to the Two-Factor Authentication page.
+
+At this point, the application assumes the user must complete the second authentication step before proceeding.
+
+![Carlos 2FA Page](images/auth-lab2-2fa-bypass/04-carlos-2fa-page.png)
+
+---
+
+## Step 5: Bypass the 2FA Verification Process
+
+Instead of entering a verification code, manually modify the URL and navigate directly to:
+
+```text
+/my-account
+```
+
+Example:
+
+```text
+https://LAB-ID.web-security-academy.net/my-account
+```
+
+The application grants access immediately.
+
+No verification code is required.
+
+No server-side validation occurs.
+
+This confirms that the application trusts the authentication flow rather than validating whether 2FA has actually been completed.
+
+![Lab Solved](images/auth-lab2-2fa-bypass/05-lab-solved-carlos-account.png)
+
+---
+
+# Technical Analysis
+
+The vulnerability exists because the application creates a partially authenticated session immediately after successful username and password verification.
+
+Instead of checking whether:
+
+```text
+2FA Status = Completed
+```
+
+before granting access to protected resources, the application only verifies that the user has successfully completed the first authentication step.
+
+As a result:
+
+```text
+Username + Password
+          ↓
+      Session Created
+          ↓
+ Direct Access to Protected Pages
+          ↓
+      2FA Bypassed
+```
+
+This breaks the fundamental security model of multi-factor authentication.
+
+---
+
+## Result
+
+- Successfully authenticated using valid credentials.
+- Identified improper enforcement of Two-Factor Authentication.
+- Bypassed the second authentication factor.
+- Accessed Carlos's account without a valid verification code.
+- Successfully solved the lab.
+
+---
+
+## Impact
+
+If this vulnerability exists in a real-world application, attackers who obtain valid credentials can bypass the additional security provided by 2FA.
+
+Potential impacts include:
+
+- Unauthorized account access
+- Account takeover attacks
+- Exposure of sensitive information
+- Compromise of privileged accounts
+- Increased effectiveness of credential stuffing attacks
+- Reduced effectiveness of security controls
+
+Organizations often deploy 2FA specifically to mitigate stolen password attacks. A bypass vulnerability completely defeats this protection.
+
+---
+
+## Mitigation
+
+To prevent 2FA bypass vulnerabilities:
+
+### 1. Enforce 2FA Server-Side
+
+Protected resources must verify that second-factor authentication has been completed.
+
+### 2. Track Authentication State
+
+Maintain a dedicated session variable such as:
+
+```text
+2FA_VERIFIED = TRUE
+```
+
+before granting access.
+
+### 3. Restrict Access to Sensitive Endpoints
+
+Users who have not completed 2FA should only be allowed to access:
+
+```text
+/login
+/2fa
+/logout
+```
+
+All other endpoints should remain inaccessible.
+
+### 4. Validate Authorization on Every Request
+
+Authorization checks should occur server-side for every protected resource.
+
+### 5. Conduct Authentication Security Testing
+
+Regular penetration testing and authentication reviews can identify workflow weaknesses before deployment.
+
+---
+
+## CVSS Score
+
+**CVSS v3.1 Score: 8.1 (High)**
+
+### Vector
+
+```text
+CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N
+```
+
+---
+
+## CVSS Explanation
+
+- **AV:N (Network):** Exploitable remotely.
+- **AC:L (Low):** Easy to exploit.
+- **PR:L (Low):** Requires valid credentials.
+- **UI:N (None):** No victim interaction required.
+- **S:U (Unchanged):** Impact remains within the vulnerable application.
+- **C:H (High):** Sensitive information may be exposed.
+- **I:H (High):** Unauthorized actions can be performed.
+- **A:N (None):** No direct impact on availability.
+
+---
+
+## Conclusion
+
+This lab demonstrates a common implementation flaw in multi-factor authentication systems. While the application appears to enforce Two-Factor Authentication, it fails to validate whether the second authentication step has been completed before granting access to protected resources.
+
+By directly requesting the account page, an attacker can bypass the verification process entirely and gain unauthorized access. This highlights the importance of enforcing authentication controls on the server side rather than relying on client-side navigation or application workflow assumptions.
+
+---
+
+## Key Learning
+
+- Two-Factor Authentication is only effective when enforced correctly.
+- Security controls must be validated server-side.
+- Authentication workflows should never rely solely on redirects.
+- Protected resources must verify complete authentication state.
+- A flawed 2FA implementation can reduce security back to single-factor authentication.
+- Authentication testing is a critical component of web application security assessments.
